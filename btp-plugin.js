@@ -408,7 +408,8 @@ class AbstractBtpPlugin extends EventEmitter {
     const rejectionReason = IlpPacket.serializeIlpError({
       code: reason.code,
       name: reason.name,
-      triggeredBy: reason.triggered_by,
+      message: reason.message,
+      triggeredBy: reason.triggered_by || '',
       forwardedBy: reason.forwarded_by || [],
       triggeredAt: (reason.triggered_at && new Date(reason.triggered_at)) || new Date(),
       data: (reason.additional_info && JSON.stringify(reason.additional_info)) || ''
@@ -439,7 +440,17 @@ class AbstractBtpPlugin extends EventEmitter {
     const { ilp } = protocolDataToIlpAndCustom(data)
     const ilpPacket = IlpPacket.deserializeIlpPacket(Buffer.from(ilp, 'base64')).data
 
-    this._safeEmit('outgoing_reject', this._getOutgoingTransferById(data.id), ilpPacket)
+    const rejectionReason = {
+      code: ilpPacket.code,
+      name: ilpPacket.name,
+      message: ilpPacket.message,
+      triggered_by: ilpPacket.triggeredBy,
+      forwarded_by: ilpPacket.forwardedBy,
+      triggered_at: ilpPacket.triggeredAt,
+      additional_info: ilpPacket.data
+    }
+
+    this._safeEmit('outgoing_reject', this._getOutgoingTransferById(data.transferId), rejectionReason)
 
     this._outgoingTransfers.delete(data.id)
   }

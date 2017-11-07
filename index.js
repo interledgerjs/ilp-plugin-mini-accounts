@@ -11,6 +11,14 @@ function tokenToAccount (token) {
   return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
 }
 
+function ilpAddressToAccount (prefix, ilpAddress) {
+  if (ilpAddress.substr(0, prefix.length) !== prefix) {
+    throw new Error('ILP address (' + ilpAddress + ') must start with prefix (' + prefix + ')')
+  }
+
+  return ilpAddress.substr(prefix.length).split('.')[0]
+}
+
 class Plugin extends AbstractBtpPlugin {
   constructor (opts) {
     super()
@@ -23,6 +31,9 @@ class Plugin extends AbstractBtpPlugin {
     this._wss = null
     this._balances = new Map()
     this._connections = new Map()
+
+    this.on('outgoing_fulfill', this._handleOutgoingFulfill.bind(this))
+    this.on('incoming_reject', this._handleIncomingReject.bind(this))
 
     if (this._modeInfiniteBalances) {
       this._log.warn('(!!!) granting all users infinite balances')
@@ -89,7 +100,7 @@ class Plugin extends AbstractBtpPlugin {
           debug(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
           try {
             if (btpPacket.type === BtpPacket.TYPE_PREPARE) {
-              this._handleBtpPrepare(token, btpPacket)
+              this._handleIncomingBtpPrepare(account, btpPacket)
             }
             debug('packet is authorized, forwarding to host')
             this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
@@ -123,7 +134,7 @@ class Plugin extends AbstractBtpPlugin {
     return !!this._wss
   }
 
-  _handleBtpPrepare (account, btpPacket) {
+  _handleIncomingBtpPrepare (account, btpPacket) {
     const prepare = btpPacket.data
     if (prepare.protocolData.length < 1 || prepare.protocolData[0].protocolName !== 'ilp') {
       throw new Error('ILP packet is required')
@@ -132,10 +143,6 @@ class Plugin extends AbstractBtpPlugin {
 
     const currentBalance = this._balances.get(account) || new BigNumber(0)
 
-    if (!currentBalance) {
-      throw new Error('No balance available for this token')
-    }
-
     const newBalance = currentBalance.sub(prepare.amount)
 
     if (newBalance.lessThan(0) && !this._modeInfiniteBalances) {
@@ -143,10 +150,32 @@ class Plugin extends AbstractBtpPlugin {
     }
 
     this._balances.set(account, newBalance)
+
+    debug(`account ${account} debited ${prepare.amount} units, new balance ${newBalance}`)
+  }
+
+  _handleOutgoingFulfill (transfer) {
+    const account = ilpAddressToAccount(this._prefix, transfer.to)
+    const currentBalance = this._balances.get(account) || new BigNumber(0)
+    const newBalance = currentBalance.add(transfer.amount)
+
+    this._balances.set(account, newBalance)
+
+    debug(`account ${account} credited ${transfer.amount} units, new balance ${newBalance}`)
+  }
+
+  _handleIncomingReject (transfer) {
+    const account = ilpAddressToAccount(this._prefix, transfer.from)
+    const currentBalance = this._balances.get(account) || new BigNumber(0)
+    const newBalance = currentBalance.add(transfer.amount)
+
+    this._balances.set(account, newBalance)
+
+    debug(`account ${account} credited ${transfer.amount} units, new balance ${newBalance}`)
   }
 
   getAccount () {
-    return this._prefix + 'host'
+    return this._prefix + 'server'
   }
 
   getInfo () {
@@ -162,7 +191,7 @@ class Plugin extends AbstractBtpPlugin {
       throw new Error('Invalid destination "' + to + '", must start with prefix: ' + this._prefix)
     }
 
-    const account = to.substr(this._prefix.length).split('.')[0]
+    const account = ilpAddressToAccount(this._prefix, to)
 
     const connections = this._connections.get(account)
 

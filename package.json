@@ -33,7 +33,7 @@
     "ilp-plugin-payment-channel-framework": "^1.0.1",
     "int64": "0.0.5",
     "uuid": "^3.1.0",
-    "ws": "^3.2.0"
+    "ws": "^3.3.0"
   },
   "devDependencies": {
     "eslint": "^4.10.0",
