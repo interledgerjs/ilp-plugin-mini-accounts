@@ -24,6 +24,7 @@ class Plugin extends AbstractBtpPlugin {
     super()
     this._prefix = opts.prefix
     this._port = opts.port || 3000
+    this._wsOpts = opts.wsOpts || { port: this._port }
     this._currencyScale = opts.currencyScale || 9
     this._modeInfiniteBalances = !!opts.debugInfiniteBalances
 
@@ -42,7 +43,7 @@ class Plugin extends AbstractBtpPlugin {
 
   connect () {
     debug('listening on port ' + this._port)
-    const wss = this._wss = new WebSocket.Server({ port: this._port })
+    const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming) => {
       debug('got connection')
       let token
