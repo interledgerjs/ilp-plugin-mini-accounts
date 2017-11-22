@@ -363,8 +363,10 @@ class AbstractBtpPlugin extends EventEmitter {
     return ilpAndCustomToProtocolData({ ilp: response.ilp, custom: response.custom })
   }
 
-  async fulfillCondition (transferId, fulfillment) {
-    const protocolData = []
+  async fulfillCondition (transferId, fulfillment, ilp) {
+    const protocolData = ilp
+      ? [{ protocolName: 'ilp', contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM, data: ilp }]
+      : []
     const requestId = await _requestId()
 
     const transfer = this._getIncomingTransferById(transferId)
@@ -374,7 +376,7 @@ class AbstractBtpPlugin extends EventEmitter {
         JSON.stringify(transfer))
     }
 
-    this._safeEmit('incoming_fulfill', transfer, fulfillment)
+    this._safeEmit('incoming_fulfill', transfer, fulfillment, ilp)
 
     await this._call(transfer.from, {
       type: BtpPacket.TYPE_FULFILL,
@@ -393,9 +395,10 @@ class AbstractBtpPlugin extends EventEmitter {
 
   async _handleFulfillCondition (from, { data }) {
     const transferId = data.transferId
+    const { ilp } = protocolDataToIlpAndCustom(data)
     const transfer = this._getOutgoingTransferById(transferId)
 
-    this._safeEmit('outgoing_fulfill', transfer, data.fulfillment)
+    this._safeEmit('outgoing_fulfill', transfer, data.fulfillment, ilp)
 
     this._outgoingTransfers.delete(transferId)
 
