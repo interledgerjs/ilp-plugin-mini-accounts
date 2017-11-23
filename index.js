@@ -42,6 +42,8 @@ class Plugin extends AbstractBtpPlugin {
   }
 
   connect () {
+    if (this._wss) return
+
     debug('listening on port ' + this._port)
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming) => {
