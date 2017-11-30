@@ -2,7 +2,7 @@
 
 const crypto = require('crypto')
 const debug = require('debug')('ilp-plugin-mini-accounts:btp-plugin')
-const EventEmitter = require('events').EventEmitter
+const EventEmitter = require('eventemitter2')
 const BtpPacket = require('btp-packet')
 const IlpPacket = require('ilp-packet')
 const base64url = require('base64url')
