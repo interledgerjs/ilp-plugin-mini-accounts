@@ -376,6 +376,7 @@ class AbstractBtpPlugin extends EventEmitter {
         JSON.stringify(transfer))
     }
 
+    console.log('INCOMING FULFILL')
     this._safeEmit('incoming_fulfill', transfer, fulfillment, ilp)
 
     await this._call(transfer.from, {
@@ -398,6 +399,7 @@ class AbstractBtpPlugin extends EventEmitter {
     const { ilp } = protocolDataToIlpAndCustom(data)
     const transfer = this._getOutgoingTransferById(transferId)
 
+    console.log('OUTGOING FULFILL')
     this._safeEmit('outgoing_fulfill', transfer, data.fulfillment, ilp)
 
     this._outgoingTransfers.delete(transferId)

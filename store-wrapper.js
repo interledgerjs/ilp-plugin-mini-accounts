@@ -7,6 +7,7 @@ class StoreWrapper {
 
   async load (key) {
     if (!this._store) return
+    if (this._cache.get(key)) return
     this._cache.set(key, await this._store.get(key))
   }
 
@@ -14,11 +15,13 @@ class StoreWrapper {
     return this._cache.get(key)
   }
 
-  set (key, value) {
+  set (key, value, persist) {
     this._cache.set(key, value)
-    this._write = this._write.then(() => {
-      return this._store.put(key, value)
-    })
+    if (persist) {
+      this._write = this._write.then(() => {
+        return this._store.put(key, value)
+      })
+    }
   }
 }
 
