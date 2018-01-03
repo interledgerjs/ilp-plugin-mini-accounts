@@ -4,8 +4,10 @@ const BigNumber = require('bignumber.js')
 const WebSocket = require('ws')
 const assert = require('assert')
 const debug = require('debug')('ilp-plugin-mini-accounts')
-const AbstractBtpPlugin = require('./btp-plugin')
+const AbstractBtpPlugin = require('ilp-plugin-btp')
 const base64url = require('base64url')
+const ILDCP = require('ilp-protocol-ildcp')
+const IlpPacket = require('ilp-packet')
 
 function tokenToAccount (token) {
   return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
@@ -21,8 +23,7 @@ function ilpAddressToAccount (prefix, ilpAddress) {
 
 class Plugin extends AbstractBtpPlugin {
   constructor (opts) {
-    super()
-    this._prefix = opts.prefix
+    super({})
     this._port = opts.port || 3000
     this._wsOpts = opts.wsOpts || { port: this._port }
     this._currencyScale = opts.currencyScale || 9
@@ -33,16 +34,16 @@ class Plugin extends AbstractBtpPlugin {
     this._balances = new Map()
     this._connections = new Map()
 
-    this.on('outgoing_fulfill', this._handleOutgoingFulfill.bind(this))
-    this.on('incoming_reject', this._handleIncomingReject.bind(this))
-
     if (this._modeInfiniteBalances) {
       this._log.warn('(!!!) granting all users infinite balances')
     }
   }
 
-  connect () {
+  async connect () {
     if (this._wss) return
+
+    this._hostIldcpInfo = await ILDCP.fetch(this._dataHandler.bind(this))
+    this._prefix = this._hostIldcpInfo.clientAddress + '.'
 
     debug('listening on port ' + this._port)
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
@@ -102,9 +103,6 @@ class Plugin extends AbstractBtpPlugin {
           }
           debug(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
           try {
-            if (btpPacket.type === BtpPacket.TYPE_PREPARE) {
-              this._handleIncomingBtpPrepare(account, btpPacket)
-            }
             debug('packet is authorized, forwarding to host')
             this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
           } catch (err) {
@@ -135,6 +133,90 @@ class Plugin extends AbstractBtpPlugin {
 
   isConnected () {
     return !!this._wss
+  }
+
+  async sendData (buffer) {
+    const parsedPacket = IlpPacket.deserializeIlpPacket(buffer)
+
+    let destination
+    switch (parsedPacket.type) {
+      case IlpPacket.Type.TYPE_ILP_PAYMENT:
+      case IlpPacket.Type.TYPE_ILP_FORWARDED_PAYMENT:
+        destination = parsedPacket.data.account
+        break
+      case IlpPacket.Type.TYPE_ILP_PREPARE:
+        destination = parsedPacket.data.destination
+        break
+      case IlpPacket.Type.TYPE_ILQP_LIQUIDITY_REQUEST:
+      case IlpPacket.Type.TYPE_ILQP_BY_SOURCE_REQUEST:
+      case IlpPacket.Type.TYPE_ILQP_BY_DESTINATION_REQUEST:
+        destination = parsedPacket.data.destinationAccount
+        break
+      default:
+        throw new Error('can\'t route packet with no destination. type=' + parsedPacket.type)
+    }
+
+    if (!destination.startsWith(this._prefix)) {
+      throw new Error(`can't route packet that is not meant for one of my clients. destination=${destination} prefix=${this._prefix}`)
+    }
+
+    const response = await this._call(destination, {
+      type: BtpPacket.TYPE_MESSAGE,
+      requestId: crypto.randomBytes(4).readUInt32BE(),
+      data: { protocolData: [{
+        protocolName: 'ilp',
+        contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
+        data: buffer
+      }] }
+    })
+
+    const ilpResponse = response.protocolData
+      .filter(p => p.protocolName === 'ilp')[0]
+
+    return ilpResponse
+      ? ilpResponse.data
+      : Buffer.alloc(0)
+  }
+
+  async _handleData (from, btpPacket) {
+    const ilpProtocolData = btpPacket.data.protocolData.find(p => p.protocolName === 'ilp')
+
+    if (!ilpProtocolData) {
+      debug('invalid packet, no ilp protocol data. from=%s', from)
+      throw new Error('invalid packet, no ilp protocol data.')
+    }
+
+    const packet = ilpProtocolData.data
+
+    if (!this._dataHandler) {
+      throw new Error('no request handler registered')
+    }
+
+    const parsedPacket = IlpPacket.deserializeIlpPacket(packet)
+
+    if (parsedPacket.data.destination === 'peer.config') {
+      debug('responding to ILDCP request. clientAddress=%s', from)
+      return [{
+        protocolName: 'ilp',
+        contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
+        data: await ILDCP.serve({
+          requestPacket: packet,
+          handler: () => ({
+            ...this._hostIldcpInfo,
+            clientAddress: from
+          }),
+          serverAddress: this._hostIldcpInfo.clientAddress
+        })
+      }]
+    }
+
+    const response = await this._dataHandler(packet)
+
+    return [{
+      protocolName: 'ilp',
+      contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
+      data: response
+    }]
   }
 
   _handleIncomingBtpPrepare (account, btpPacket) {
@@ -190,8 +272,8 @@ class Plugin extends AbstractBtpPlugin {
   }
 
   async _handleOutgoingBtpPacket (to, btpPacket) {
-    if (to.substring(0, this._prefix.length) !== this._prefix) {
-      throw new Error('Invalid destination "' + to + '", must start with prefix: ' + this._prefix)
+    if (!to.startsWith(this._prefix)) {
+      throw new Error(`invalid destination, must start with prefix. destination=${to} prefix=${this._prefix}`)
     }
 
     const account = ilpAddressToAccount(this._prefix, to)
@@ -216,5 +298,7 @@ class Plugin extends AbstractBtpPlugin {
     return null
   }
 }
+
+Plugin.version = 2
 
 module.exports = Plugin

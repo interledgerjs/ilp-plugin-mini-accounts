@@ -30,7 +30,11 @@
     "base64url": "^2.0.0",
     "btp-packet": "^1.0.0",
     "debug": "^3.1.0",
+    "ilp": "^11.4.0",
+    "ilp-packet": "^2.1.2",
+    "ilp-plugin-btp": "^1.0.0",
     "ilp-plugin-payment-channel-framework": "^1.0.1",
+    "ilp-protocol-ildcp": "^1.0.0",
     "int64": "0.0.5",
     "uuid": "^3.1.0",
     "ws": "^3.3.0"
