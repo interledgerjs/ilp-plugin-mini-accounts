@@ -1,3 +1,5 @@
+'use strict'
+
 const crypto = require('crypto')
 const BtpPacket = require('btp-packet')
 const BigNumber = require('bignumber.js')
@@ -8,6 +10,18 @@ const AbstractBtpPlugin = require('ilp-plugin-btp')
 const base64url = require('base64url')
 const ILDCP = require('ilp-protocol-ildcp')
 const IlpPacket = require('ilp-packet')
+const fetch = require('node-fetch')
+
+async function isPassCompromised (pass) {
+  try {
+    const hash = crypto.createHash('sha1').update(pass, 'utf8').digest().toString('hex')
+    const res = await fetch('https://haveibeenpwned.com/api/v2/pwnedpassword/' + hash)
+    return res.status !== 404 // 404 = password is not compromised
+  } catch (err) {
+    debug('Could not check if account password is compromised ', err)
+    return true
+  }
+}
 
 function tokenToAccount (token) {
   return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
@@ -65,6 +79,11 @@ class Plugin extends AbstractBtpPlugin {
             if (subProtocol.protocolName === 'auth_token') {
               // TODO: Do some validation on the token
               token = subProtocol.data
+              
+              if (isPassCompromised(token)) {
+                // close connection
+              }
+
               account = tokenToAccount(token)
 
               let connections = this._connections.get(account)
