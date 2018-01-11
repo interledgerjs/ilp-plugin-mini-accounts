@@ -32,3 +32,5 @@ const plugin = new IlpPluginMiniAccounts({
   port: 6666
 })
 ```
+
+Note that this module requires node version 8.3.0 or higher.
