@@ -24,8 +24,8 @@ function ilpAddressToAccount (prefix, ilpAddress) {
 class Plugin extends AbstractBtpPlugin {
   constructor (opts) {
     super({})
-    this._port = opts.port || 3000
-    this._wsOpts = opts.wsOpts || { port: this._port }
+    const defaultPort =  opts.port || 3000
+    this._wsOpts = opts.wsOpts || { port: defaultPort }
     this._currencyScale = opts.currencyScale || 9
     this._modeInfiniteBalances = !!opts.debugInfiniteBalances
 
@@ -45,7 +45,7 @@ class Plugin extends AbstractBtpPlugin {
     this._hostIldcpInfo = await ILDCP.fetch(this._dataHandler.bind(this))
     this._prefix = this._hostIldcpInfo.clientAddress + '.'
 
-    debug('listening on port ' + this._port)
+    debug('listening on port ' + this._wsOpts.port)
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming) => {
       debug('got connection')

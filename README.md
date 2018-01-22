@@ -27,9 +27,17 @@ logic.](https://github.com/interledgerjs/ilp-connector/issues/400#issuecomment-3
 
 ```js
 const plugin = new IlpPluginMiniAccounts({
-  // A websocket server will run on this port. Any BTP connections are
-  // accepted.
-  port: 6666
+  // A WebSocket server will run with these options, as described in:
+  // https://github.com/websockets/ws/blob/master/doc/ws.md#new-websocketserveroptions-callback
+  //
+  // Any connections are expected to be ILP v4 over BTP, as discussed in:
+  // https://github.com/interledger/rfcs/pull/360.
+  //
+  // The first packet should be an auth packet, but any random auth token will be accepted.
+
+  wsOpts: {
+    port: 6666
+  }
 })
 ```
 
