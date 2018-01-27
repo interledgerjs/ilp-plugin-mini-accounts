@@ -82,7 +82,8 @@ class Plugin extends AbstractBtpPlugin {
           debug('got auth info. token=' + token, 'account=' + account)
           if (this._store) {
             await this._store.load(account)
-            if (this._store.get(account) !== token) {
+            const storedToken = this._store.get(account)
+            if (storedToken && storedToken !== token) {
               throw new Error('incorrect token for account.' +
                 ' account=' + account +
                 ' token=' + token)
