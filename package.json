@@ -35,6 +35,7 @@
     "ilp-plugin-btp": "^1.1.3",
     "ilp-plugin-payment-channel-framework": "^1.0.1",
     "ilp-protocol-ildcp": "^1.0.0",
+    "ilp-store-wrapper": "^1.0.0",
     "int64": "0.0.5",
     "uuid": "^3.1.0",
     "ws": "^3.3.0"

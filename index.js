@@ -7,6 +7,7 @@ const AbstractBtpPlugin = require('ilp-plugin-btp')
 const base64url = require('base64url')
 const ILDCP = require('ilp-protocol-ildcp')
 const IlpPacket = require('ilp-packet')
+const StoreWrapper = require('ilp-store-wrapper')
 
 function tokenToAccount (token) {
   return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
@@ -23,6 +24,10 @@ class Plugin extends AbstractBtpPlugin {
     this._log = opts._log || console
     this._wss = null
     this._connections = new Map()
+
+    if (opts._store) {
+      this._store = new StoreWrapper(opts._store)
+    }
   }
 
   ilpAddressToAccount (ilpAddress) {
