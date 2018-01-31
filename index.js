@@ -8,6 +8,7 @@ const base64url = require('base64url')
 const ILDCP = require('ilp-protocol-ildcp')
 const IlpPacket = require('ilp-packet')
 const StoreWrapper = require('ilp-store-wrapper')
+let lastSender
 
 function tokenToAccount (token) {
   return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
@@ -132,6 +133,7 @@ class Plugin extends AbstractBtpPlugin {
           try {
             debug('packet is authorized, forwarding to host')
             this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
+            lastSender = account
           } catch (err) {
             debug('btp packet not accepted', err)
             const errorResponse = BtpPacket.serializeError({
@@ -287,6 +289,25 @@ class Plugin extends AbstractBtpPlugin {
     })
 
     return null
+  }
+  async sendMoney (amount) {
+    async function _requestId () {
+      return new Promise((resolve, reject) => {
+        crypto.randomBytes(4, (err, buf) => {
+          if (err) reject(err)
+          resolve(buf.readUInt32BE(0))
+        })
+      })
+    }
+    console.log('sendingmoney!', amount, lastSender)
+    return this._handleOutgoingBtpPacket('test.amundsen.bmp.btp18q1.' + lastSender, {
+      type: BtpPacket.TYPE_TRANSFER,
+      requestId: await _requestId(),
+      data: {
+        amount,
+        protocolData: []
+      }
+    })
   }
 }
 
