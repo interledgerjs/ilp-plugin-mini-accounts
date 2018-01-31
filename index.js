@@ -52,6 +52,12 @@ class Plugin extends AbstractBtpPlugin {
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming, req) => {
       debug('got connection')
+      if (req.headers && req.headers.origin) {
+        debug(`Closing a websocket connection received from a browser. Origin is ${req.headers.origin}`)
+        wsIncoming.close()
+        return
+      }
+
       let token
       let account
 
