@@ -1,3 +1,5 @@
+'use strict'
+
 const crypto = require('crypto')
 const BtpPacket = require('btp-packet')
 const WebSocket = require('ws')
@@ -8,6 +10,7 @@ const base64url = require('base64url')
 const ILDCP = require('ilp-protocol-ildcp')
 const IlpPacket = require('ilp-packet')
 const StoreWrapper = require('ilp-store-wrapper')
+const OriginWhitelist = require('./src/lib/origin-whitelist')
 
 function tokenToAccount (token) {
   return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
@@ -24,6 +27,8 @@ class Plugin extends AbstractBtpPlugin {
     this._log = opts._log || console
     this._wss = null
     this._connections = new Map()
+
+    this._allowedOrigins = new OriginWhitelist(opts.allowedOrigins)
 
     if (opts._store) {
       this._store = new StoreWrapper(opts._store)
@@ -52,7 +57,7 @@ class Plugin extends AbstractBtpPlugin {
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming, req) => {
       debug('got connection')
-      if (req.headers && req.headers.origin) {
+      if (req.headers && req.headers.origin && !this._allowedOrigins.isWhitelisted(req.headers.origin)) {
         debug(`Closing a websocket connection received from a browser. Origin is ${req.headers.origin}`)
         wsIncoming.close()
         return
