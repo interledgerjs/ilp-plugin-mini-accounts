@@ -157,8 +157,8 @@ class Plugin extends AbstractBtpPlugin {
           debug(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
           try {
             debug('packet is authorized, forwarding to host')
-            await this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
             lastSender = account
+            await this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
           } catch (err) {
             debug('btp packet not accepted', err)
             const errorResponse = BtpPacket.serializeError({
