@@ -1,3 +1,5 @@
+'use strict'
+
 const crypto = require('crypto')
 const BtpPacket = require('btp-packet')
 const WebSocket = require('ws')
@@ -8,6 +10,7 @@ const base64url = require('base64url')
 const ILDCP = require('ilp-protocol-ildcp')
 const IlpPacket = require('ilp-packet')
 const StoreWrapper = require('ilp-store-wrapper')
+const OriginWhitelist = require('./src/lib/origin-whitelist')
 let lastSender
 
 function tokenToAccount (token) {
@@ -21,10 +24,13 @@ class Plugin extends AbstractBtpPlugin {
     this._wsOpts = opts.wsOpts || { port: defaultPort }
     this._currencyScale = opts.currencyScale || 9
     this._debugHostIldcpInfo = opts.debugHostIldcpInfo
+    this.ledgerPrefixForSendMoney = opts.ledgerPrefixForSendMoney
 
     this._log = opts._log || console
     this._wss = null
     this._connections = new Map()
+
+    this._allowedOrigins = new OriginWhitelist(opts.allowedOrigins)
 
     if (opts._store) {
       this._store = new StoreWrapper(opts._store)
@@ -53,8 +59,27 @@ class Plugin extends AbstractBtpPlugin {
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming, req) => {
       debug('got connection')
+      if (req.headers && req.headers.origin && !this._allowedOrigins.isOk(req.headers.origin)) {
+        debug(`Closing a websocket connection received from a browser. Origin is ${req.headers.origin}`)
+        wsIncoming.close()
+        return
+      }
+
       let token
       let account
+
+      const closeHandler = error => {
+        debug('incoming ws closed. error=', error)
+        if (this._close) {
+          this._close(this._prefix + account, error)
+            .catch(e => {
+              debug('error during custom close handler. error=', e)
+            })
+        }
+      }
+
+      wsIncoming.on('close', closeHandler)
+      wsIncoming.on('error', closeHandler)
 
       // The first message must be an auth packet
       // with the macaroon as the auth_token
@@ -122,7 +147,7 @@ class Plugin extends AbstractBtpPlugin {
 
         debug('connection authenticated')
 
-        wsIncoming.on('message', (binaryMessage) => {
+        wsIncoming.on('message', async (binaryMessage) => {
           let btpPacket
           try {
             btpPacket = BtpPacket.deserialize(binaryMessage)
@@ -132,7 +157,7 @@ class Plugin extends AbstractBtpPlugin {
           debug(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
           try {
             debug('packet is authorized, forwarding to host')
-            this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
+            await this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
             lastSender = account
           } catch (err) {
             debug('btp packet not accepted', err)
@@ -290,6 +315,7 @@ class Plugin extends AbstractBtpPlugin {
 
     return null
   }
+
   async sendMoney (amount) {
     async function _requestId () {
       return new Promise((resolve, reject) => {
@@ -300,7 +326,7 @@ class Plugin extends AbstractBtpPlugin {
       })
     }
     console.log('sendingmoney!', amount, lastSender)
-    return this._handleOutgoingBtpPacket('test.amundsen.bmp.btp18q1.' + lastSender, {
+    return this._handleOutgoingBtpPacket(this.ledgerPrefixForSendMoney + lastSender, {
       type: BtpPacket.TYPE_TRANSFER,
       requestId: await _requestId(),
       data: {
