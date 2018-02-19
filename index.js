@@ -317,6 +317,10 @@ class Plugin extends AbstractBtpPlugin {
   }
 
   async sendMoney (amount) {
+    if (!lastSender) {
+      console.log('sending money to nobody!', amount)
+      return
+    }
     async function _requestId () {
       return new Promise((resolve, reject) => {
         crypto.randomBytes(4, (err, buf) => {
