@@ -50,7 +50,12 @@ class Plugin extends AbstractBtpPlugin {
     this._prefix = this._hostIldcpInfo.clientAddress + '.'
 
     if (this._preConnect) {
-      await this._preConnect()
+      try {
+        await this._preConnect()
+      } catch (err) {
+        debug(`Error on _preConnect. Reason is: ${err.message}`)
+        throw new Error('Failed to connect')
+      }
     }
 
     debug('listening on port ' + this._wsOpts.port)
