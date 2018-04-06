@@ -64,6 +64,8 @@ class Plugin extends AbstractBtpPlugin {
       debug('got connection')
       if (req.headers && req.headers.origin && !this._allowedOrigins.isOk(req.headers.origin)) {
         debug(`Closing a websocket connection received from a browser. Origin is ${req.headers.origin}`)
+        debug('If you are running moneyd, you may allow this origin with the flag --allow-origin.' +
+          ' Run moneyd --help for details.')
         wsIncoming.close()
         return
       }
