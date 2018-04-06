@@ -1,6 +1,6 @@
 {
   "name": "ilp-plugin-mini-accounts",
-  "version": "3.4.3",
+  "version": "3.4.4",
   "description": "Plugin that implements a mini ephemeral ledger",
   "main": "index.js",
   "scripts": {
