@@ -13,6 +13,10 @@ const { Errors } = IlpPacket
 const StoreWrapper = require('ilp-store-wrapper')
 const OriginWhitelist = require('./src/lib/origin-whitelist')
 const Token = require('./src/token')
+const createLogger = require('./src/lib/logs.js')
+
+const DEBUG_NAMESPACE = 'ilp-plugin-mini-accounts'
+const TRACE_NAMESPACE = 'ilp-plugin-mini-accounts:trace'
 
 function tokenToAccount (token) {
   return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
@@ -26,7 +30,12 @@ class Plugin extends AbstractBtpPlugin {
     this._currencyScale = opts.currencyScale || 9
     this._debugHostIldcpInfo = opts.debugHostIldcpInfo
 
-    this._log = opts._log || console
+    this._logger = opts._log || createLogger
+    this._log = this._logger(DEBUG_NAMESPACE)
+    this._tracer = this._logger(TRACE_NAMESPACE)
+    this._trace = function (msg) {
+      this._tracer.debug(msg)
+    }
     this._wss = null
     this._connections = new Map()
 
@@ -55,18 +64,18 @@ class Plugin extends AbstractBtpPlugin {
       try {
         await this._preConnect()
       } catch (err) {
-        debug(`Error on _preConnect. Reason is: ${err.message}`)
+        this._log.error(`Error on _preConnect. Reason is: ${err.message}`)
         throw new Error('Failed to connect')
       }
     }
 
-    debug('listening on port ' + this._wsOpts.port)
+    this._log.info('listening on port ' + this._wsOpts.port)
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming, req) => {
-      debug('got connection')
+      this._log.debug('got connection')
       if (req.headers && req.headers.origin && !this._allowedOrigins.isOk(req.headers.origin)) {
-        debug(`Closing a websocket connection received from a browser. Origin is ${req.headers.origin}`)
-        debug('If you are running moneyd, you may allow this origin with the flag --allow-origin.' +
+        this._log.debug(`Closing a websocket connection received from a browser. Origin is ${req.headers.origin}`)
+        this._log.debug('If you are running moneyd, you may allow this origin with the flag --allow-origin.' +
           ' Run moneyd --help for details.')
         wsIncoming.close()
         return
@@ -76,11 +85,11 @@ class Plugin extends AbstractBtpPlugin {
       let account
 
       const closeHandler = error => {
-        debug('incoming ws closed. error=', error)
+        this._log.error('incoming ws closed. error=', error)
         if (this._close) {
           this._close(this._prefix + account, error)
             .catch(e => {
-              debug('error during custom close handler. error=', e)
+              this._log.error('error during custom close handler. error=', e)
             })
         }
       }
@@ -117,7 +126,7 @@ class Plugin extends AbstractBtpPlugin {
           }
           assert(token, 'auth_token subprotocol is required')
 
-          debug('got auth info. token=' + token, 'account=' + account)
+          this._log.debug('got auth info. token=' + token, 'account=' + account)
           if (this._store) {
             const storedToken = await Token.load({account, store: this._store})
             const receivedToken = new Token({account, token, store: this._store})
@@ -142,7 +151,7 @@ class Plugin extends AbstractBtpPlugin {
           wsIncoming.send(BtpPacket.serializeResponse(authPacket.requestId, []))
         } catch (err) {
           if (authPacket) {
-            debug('not accepted error during auth. error=', err)
+            this._log.error('not accepted error during auth. error=', err)
             const errorResponse = BtpPacket.serializeError({
               code: 'F00',
               name: 'NotAcceptedError',
@@ -155,7 +164,7 @@ class Plugin extends AbstractBtpPlugin {
           return
         }
 
-        debug('connection authenticated')
+        this._log.info('connection authenticated')
 
         wsIncoming.on('message', async (binaryMessage) => {
           let btpPacket
@@ -164,12 +173,12 @@ class Plugin extends AbstractBtpPlugin {
           } catch (err) {
             wsIncoming.close()
           }
-          debug(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
+          this._trace(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
           try {
-            debug('packet is authorized, forwarding to host')
+            this._trace('packet is authorized, forwarding to host')
             await this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
           } catch (err) {
-            debug('btp packet not accepted', err)
+            this._trace('btp packet not accepted', err)
             const errorResponse = BtpPacket.serializeError({
               code: 'F00',
               name: 'NotAcceptedError',
@@ -282,7 +291,7 @@ class Plugin extends AbstractBtpPlugin {
       const parsedPacket = IlpPacket.deserializeIlpPacket(ilp)
 
       if (parsedPacket.data.destination === 'peer.config') {
-        debug('responding to ILDCP request. clientAddress=%s', from)
+        this._trace('responding to ILDCP request. clientAddress=%s', from)
         return [{
           protocolName: 'ilp',
           contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
@@ -299,12 +308,12 @@ class Plugin extends AbstractBtpPlugin {
     }
 
     if (this._handleCustomData) {
-      debug('passing non-ILDCP data to custom handler')
+      this._trace('passing non-ILDCP data to custom handler')
       return this._handleCustomData(from, btpPacket)
     }
 
     if (!ilp) {
-      debug('invalid packet, no ilp protocol data. from=%s', from)
+      this._log.error('invalid packet, no ilp protocol data. from=%s', from)
       throw new Error('invalid packet, no ilp protocol data.')
     }
 
@@ -333,7 +342,7 @@ class Plugin extends AbstractBtpPlugin {
 
       result.catch(err => {
         const errorInfo = (typeof err === 'object' && err.stack) ? err.stack : String(err)
-        debug('unable to send btp message to client: ' + errorInfo, 'btp packet:', JSON.stringify(btpPacket))
+        this._log.error('unable to send btp message to client: ' + errorInfo, 'btp packet:', JSON.stringify(btpPacket))
       })
     })
 
