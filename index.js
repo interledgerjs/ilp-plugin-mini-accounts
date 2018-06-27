@@ -13,7 +13,7 @@ const { Errors } = IlpPacket
 const StoreWrapper = require('ilp-store-wrapper')
 const OriginWhitelist = require('./src/lib/origin-whitelist')
 const Token = require('./src/token')
-const createLogger = require('./src/lib/logs.js')
+const createLogger = require('ilp-logger')
 
 const DEBUG_NAMESPACE = 'ilp-plugin-mini-accounts'
 
