@@ -41,6 +41,7 @@ describe('Mini Accounts Plugin', () => {
 
   afterEach(async function () {
     await this.plugin.disconnect()
+    assert.equal(this.plugin._connections.size, 0)
   })
 
   describe('Authentication', function () {

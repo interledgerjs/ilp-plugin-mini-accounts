@@ -81,6 +81,7 @@ class Plugin extends AbstractBtpPlugin {
 
       const closeHandler = error => {
         this._log.debug('incoming ws closed. error=', error)
+        if (account) this._removeConnection(account, wsIncoming)
         if (this._close) {
           this._close(this._prefix + account, error)
             .catch(e => {
@@ -106,13 +107,7 @@ class Plugin extends AbstractBtpPlugin {
               // TODO: Do some validation on the token
               token = subProtocol.data.toString()
               account = account || tokenToAccount(token)
-
-              let connections = this._connections.get(account)
-              if (!connections) {
-                this._connections.set(account, connections = new Set())
-              }
-
-              connections.add(wsIncoming)
+              this._addConnection(account, wsIncoming)
             } else if (subProtocol.protocolName === 'auth_username') {
               if (this._store) {
                 account = subProtocol.data.toString()
@@ -342,6 +337,23 @@ class Plugin extends AbstractBtpPlugin {
     })
 
     return null
+  }
+
+  _addConnection (account, wsIncoming) {
+    let connections = this._connections.get(account)
+    if (!connections) {
+      this._connections.set(account, connections = new Set())
+    }
+    connections.add(wsIncoming)
+  }
+
+  _removeConnection (account, wsIncoming) {
+    const connections = this._connections.get(account)
+    if (!connections) return
+    connections.delete(wsIncoming)
+    if (connections.size === 0) {
+      this._connections.delete(account)
+    }
   }
 }
 
