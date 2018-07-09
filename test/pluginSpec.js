@@ -11,12 +11,11 @@ const sinon = require('sinon')
 
 const PluginMiniAccounts = require('..')
 const Store = require('ilp-store-memory')
-const base64url = require('base64url')
 const sendAuthPaket = require('./helper/btp-util')
 const Token = require('../src/token')
 
 function sha256 (token) {
-  return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
+  return BtpPacket.base64url(crypto.createHash('sha256').update(token).digest('sha256'))
 }
 
 describe('Mini Accounts Plugin', () => {

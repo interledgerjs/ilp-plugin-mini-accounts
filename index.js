@@ -6,7 +6,6 @@ const WebSocket = require('ws')
 const assert = require('assert')
 const debug = require('debug')
 const AbstractBtpPlugin = require('ilp-plugin-btp')
-const base64url = require('base64url')
 const ILDCP = require('ilp-protocol-ildcp')
 const IlpPacket = require('ilp-packet')
 const { Errors } = IlpPacket
@@ -18,7 +17,7 @@ const createLogger = require('ilp-logger')
 const DEBUG_NAMESPACE = 'ilp-plugin-mini-accounts'
 
 function tokenToAccount (token) {
-  return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
+  return BtpPacket.base64url(crypto.createHash('sha256').update(token).digest('sha256'))
 }
 
 class Plugin extends AbstractBtpPlugin {

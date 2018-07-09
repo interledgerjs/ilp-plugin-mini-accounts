@@ -1,14 +1,14 @@
 'use strict'
 
 const assert = require('assert')
-const base64url = require('base64url')
 const crypto = require('crypto')
+const BtpPacket = require('btp-packet')
 
 const TOKEN = account => account + ':hashed-token'
 const DEPRECATED_TOKEN = account => account + ':token'
 
 function sha256 (token) {
-  return base64url(crypto.createHash('sha256').update(token).digest('sha256'))
+  return BtpPacket.base64url(crypto.createHash('sha256').update(token).digest('sha256'))
 }
 
 class Token {
