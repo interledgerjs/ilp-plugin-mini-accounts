@@ -4,12 +4,12 @@ const chai = require('chai')
 chai.use(require('chai-as-promised'))
 const assert = chai.assert
 
-const OriginWhitelist = require('../src/lib/origin-whitelist')
+const OriginWhitelist = require('../src/lib/origin-whitelist').default
 
 describe('Whitelist Spec', function () {
   describe('constructor', function () {
     it('instantiates an object with an empty whitelist', () => {
-      const o = new OriginWhitelist()
+      const o = new OriginWhitelist([])
       assert.isObject(o)
       assert.isArray(o._whitelist)
       assert.isEmpty(o._whitelist)
@@ -29,7 +29,7 @@ describe('Whitelist Spec', function () {
 
   describe('addOrigin', () => {
     beforeEach(() => {
-      this.whitelist = new OriginWhitelist()
+      this.whitelist = new OriginWhitelist([])
     })
 
     it('adds an origin', () => {
@@ -41,7 +41,7 @@ describe('Whitelist Spec', function () {
 
   describe('isOk', () => {
     beforeEach(() => {
-      this.whitelist = new OriginWhitelist()
+      this.whitelist = new OriginWhitelist([])
       this.whitelist.add('http://example.com')
     })
 

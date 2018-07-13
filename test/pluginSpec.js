@@ -12,7 +12,7 @@ const sinon = require('sinon')
 const PluginMiniAccounts = require('..')
 const Store = require('ilp-store-memory')
 const sendAuthPaket = require('./helper/btp-util')
-const Token = require('../src/token')
+const Token = require('../src/token').default
 
 function sha256 (token) {
   return BtpPacket.base64url(crypto.createHash('sha256').update(token).digest('sha256'))
