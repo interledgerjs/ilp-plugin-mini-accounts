@@ -34,7 +34,7 @@
     "@types/node": "^10.5.1",
     "@types/ws": "^5.1.2",
     "btp-packet": "^1.2.1",
-    "ilp-logger": "^1.0.1",
+    "ilp-logger": "^1.0.2",
     "ilp-packet": "^2.2.0",
     "ilp-plugin-btp": "^1.1.14",
     "ilp-protocol-ildcp": "^1.0.0",
