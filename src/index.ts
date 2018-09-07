@@ -13,8 +13,6 @@ import { Store, StoreWrapper } from './types'
 const createLogger = require('ilp-logger')
 import { IncomingMessage } from 'http'
 
-export { BtpSubProtocol } from 'ilp-plugin-btp'
-
 const DEBUG_NAMESPACE = 'ilp-plugin-mini-accounts'
 
 function tokenToAccount (token: string): string {
@@ -27,19 +25,6 @@ interface Logger {
   error (...msg: any[]): void
   debug (...msg: any[]): void
   trace (...msg: any[]): void
-}
-
-export type Protocol = {
-  protocolName: string
-  contentType: number
-  data: Buffer
-}
-
-export interface BtpData {
-  data: {
-    protocolData: Protocol[]
-  }
-  requestId: number
 }
 
 /* tslint:disable-next-line:no-empty */
@@ -94,11 +79,9 @@ export default class Plugin extends AbstractBtpPlugin {
   /* tslint:disable:no-empty */
   // These can be overridden.
   protected async _preConnect (): Promise<void> {}
-  // FIXME: right now plugin-btp and plugin-mini-accounts use different signatures
-  // for _connect -- ideally mini-accounts would use a different function name, but
-  // this is as close as it can get without being a breaking change.
-  // @ts-ignore
-  protected async _connect (address: string, authPacket: BtpData, opts: {
+  // plugin-btp and plugin-mini-accounts use slightly different signatures for _connect
+  // making the mini-accounts params optional makes them kinda compatible
+  protected async _connect (address: string, authPacket: BtpPlugin.BtpPacket, opts: {
     ws: WebSocket,
     req: IncomingMessage
   }): Promise<void> {}
