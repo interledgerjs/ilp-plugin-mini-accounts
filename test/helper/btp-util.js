@@ -3,7 +3,7 @@
 const BtpPacket = require('btp-packet')
 const WebSocket = require('ws')
 
-module.exports = async function sendAuthPaket (serverUrl, account, token) {
+module.exports = async function sendAuthPacket (serverUrl, account, token) {
   const protocolData = [{
     protocolName: 'auth',
     contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
