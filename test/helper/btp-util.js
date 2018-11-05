@@ -3,7 +3,7 @@
 const BtpPacket = require('btp-packet')
 const WebSocket = require('ws')
 
-module.exports = async function sendAuthPaket (serverUrl, account, token) {
+module.exports = async function sendAuthPacket (serverUrl, account, token) {
   const protocolData = [{
     protocolName: 'auth',
     contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
@@ -19,13 +19,18 @@ module.exports = async function sendAuthPaket (serverUrl, account, token) {
   }]
 
   const ws = new WebSocket(serverUrl)
-  await new Promise(resolve => {
-    ws.on('open', () => resolve())
+  await new Promise((resolve, reject) => {
+    ws.once('open', () => resolve())
+    ws.once('error', (err) => reject(err))
   })
 
-  const result = new Promise(resolve => ws.on('message', (msg) => {
-    resolve(BtpPacket.deserialize(msg))
-  }))
+
+  const result = new Promise((resolve) => {
+    ws.on('message', (msg) => {
+      resolve(BtpPacket.deserialize(msg))
+      ws.close()
+    })
+  })
 
   await new Promise((resolve) => ws.send(BtpPacket.serialize({
     type: BtpPacket.TYPE_MESSAGE,

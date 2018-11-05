@@ -11,7 +11,7 @@ const sinon = require('sinon')
 
 const PluginMiniAccounts = require('..')
 const Store = require('ilp-store-memory')
-const sendAuthPaket = require('./helper/btp-util')
+const sendAuthPacket = require('./helper/btp-util')
 const Token = require('../src/token').default
 
 function sha256 (token) {
@@ -51,7 +51,7 @@ describe('Mini Accounts Plugin', () => {
     describe('new account', function () {
       it('stores hashed token if account does not exist', async function () {
         const spy = sinon.spy(this.plugin._store, 'set')
-        await sendAuthPaket(this.serverUrl, 'acc', 'secret_token')
+        await sendAuthPacket(this.serverUrl, 'acc', 'secret_token')
 
         // assert that a new account was written to the store with a hashed token
         const expectedToken = sha256('secret_token')
@@ -63,11 +63,11 @@ describe('Mini Accounts Plugin', () => {
         const realStoreLoad = this.plugin._store.load.bind(this.plugin._store)
         sinon.stub(this.plugin._store, 'load').onFirstCall().callsFake(async (...args) => {
           // forces a race condition
-          await sendAuthPaket(this.serverUrl, 'acc', '2nd_secret_token')
+          await sendAuthPacket(this.serverUrl, 'acc', '2nd_secret_token')
           return realStoreLoad(...args)
         })
 
-        const msg = await sendAuthPaket(this.serverUrl, 'acc', '1st_secret_token')
+        const msg = await sendAuthPacket(this.serverUrl, 'acc', '1st_secret_token')
         assert.strictEqual(msg.type, BtpPacket.TYPE_ERROR, 'expected an BTP error')
         assert.strictEqual(msg.data.code, 'F00')
         assert.strictEqual(msg.data.name, 'NotAcceptedError')
@@ -87,7 +87,7 @@ describe('Mini Accounts Plugin', () => {
       })
 
       it('fails if received token does not match stored token', async function () {
-        const msg = await sendAuthPaket(this.serverUrl, 'acc', 'wrong_token')
+        const msg = await sendAuthPacket(this.serverUrl, 'acc', 'wrong_token')
 
         assert.strictEqual(msg.type, BtpPacket.TYPE_ERROR, 'expected an BTP error')
         assert.strictEqual(msg.data.code, 'F00')
@@ -96,7 +96,7 @@ describe('Mini Accounts Plugin', () => {
       })
 
       it('succeeds if received token matches stored token', async function () {
-        const msg = await sendAuthPaket(this.serverUrl, 'acc', 'secret_token')
+        const msg = await sendAuthPacket(this.serverUrl, 'acc', 'secret_token')
         assert.strictEqual(msg.type, BtpPacket.TYPE_RESPONSE)
       })
 
@@ -106,6 +106,46 @@ describe('Mini Accounts Plugin', () => {
         assert.isUndefined(this.plugin._store.get('other_acc:token'))
         assert.strictEqual(token._account, 'other_acc')
         assert.strictEqual(token._hashedToken, sha256('unhashed'))
+      })
+    })
+
+    describe('generateAccount = true', function () {
+      it('does not allow a random username', async function () {
+        const port = await getPort()
+        const serverUrl = 'ws://localhost:' + port
+        const plugin = new PluginMiniAccounts({
+          port: port,
+          debugHostIldcpInfo: { clientAddress: 'test.example' },
+          generateAccount: true,
+          _store: new Store()
+        })
+        await plugin.connect()
+        const msg = await sendAuthPacket(serverUrl, 'foobar', 'secret_token')
+        assert.strictEqual(msg.type, BtpPacket.TYPE_ERROR, 'expected a BTP error')
+        assert.strictEqual(msg.data.code, 'F00')
+        assert.strictEqual(msg.data.name, 'NotAcceptedError')
+        assert.strictEqual(msg.data.data, 'auth_username subprotocol is not available')
+        await plugin.disconnect()
+      })
+    })
+
+    describe('generateAccount = false', function () {
+      it('requires a username', async function () {
+        const port = await getPort()
+        const serverUrl = 'ws://localhost:' + port
+        const plugin = new PluginMiniAccounts({
+          port: port,
+          debugHostIldcpInfo: { clientAddress: 'test.example' },
+          generateAccount: false,
+          _store: new Store()
+        })
+        await plugin.connect()
+        const msg = await sendAuthPacket(serverUrl, '', 'secret_token')
+        assert.strictEqual(msg.type, BtpPacket.TYPE_ERROR, 'expected a BTP error')
+        assert.strictEqual(msg.data.code, 'F00')
+        assert.strictEqual(msg.data.name, 'NotAcceptedError')
+        assert.strictEqual(msg.data.data, 'auth_username subprotocol is required')
+        await plugin.disconnect()
       })
     })
   })

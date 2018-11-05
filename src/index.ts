@@ -27,6 +27,20 @@ interface Logger {
   trace (...msg: any[]): void
 }
 
+enum AccountMode {
+  // Account is set using the `auth_username` BTP subprotocol.
+  // A store is required in this mode.
+  Username,
+  // Account is set to sha256(token). The `auth_username` subprotocol is disallowed.
+  HashToken,
+  // Account is set to `auth_username` if available, otherwise  sha256(token) is used.
+  UsernameOrHashToken
+}
+
+function accountModeIsStored (mode: AccountMode): boolean {
+  return mode === AccountMode.Username || mode === AccountMode.UsernameOrHashToken
+}
+
 /* tslint:disable-next-line:no-empty */
 function noopTrace (...msg: any[]): void { }
 
@@ -40,6 +54,7 @@ export default class Plugin extends AbstractBtpPlugin {
   private _trace: (...msg: any[]) => void
   private _connections: Map<string, Set<WebSocket>> = new Map()
   private _allowedOrigins: OriginWhitelist
+  private _accountMode: AccountMode
   protected _store?: StoreWrapper
 
   private _hostIldcpInfo: ILDCP.IldcpResponse
@@ -55,6 +70,7 @@ export default class Plugin extends AbstractBtpPlugin {
     currencyScale?: number,
     debugHostIldcpInfo?: ILDCP.IldcpResponse,
     allowedOrigins?: string[],
+    generateAccount?: boolean,
     _store?: Store
   }, { log, store }: {
     log?: Logger,
@@ -66,13 +82,23 @@ export default class Plugin extends AbstractBtpPlugin {
     this._currencyScale = opts.currencyScale || 9
     this._debugHostIldcpInfo = opts.debugHostIldcpInfo
 
+    const _store = store || opts._store
+    this._accountMode = _store ? AccountMode.UsernameOrHashToken : AccountMode.HashToken
+    if (opts.generateAccount === true) this._accountMode = AccountMode.HashToken
+    if (opts.generateAccount === false) {
+      if (!_store) {
+        throw new Error('_store is required when generateAccount is false')
+      }
+      this._accountMode = AccountMode.Username
+    }
+
     this._log = log || createLogger(DEBUG_NAMESPACE)
     this._log.trace = this._log.trace || noopTrace
 
     this._allowedOrigins = new OriginWhitelist(opts.allowedOrigins || [])
 
-    if (store || opts._store) {
-      this._store = new StoreWrapper(store || opts._store)
+    if (_store) {
+      this._store = new StoreWrapper(_store)
     }
   }
 
@@ -161,18 +187,28 @@ export default class Plugin extends AbstractBtpPlugin {
             if (subProtocol.protocolName === 'auth_token') {
               // TODO: Do some validation on the token
               token = subProtocol.data.toString()
-              account = account || tokenToAccount(token)
-              this._addConnection(account, wsIncoming)
             } else if (subProtocol.protocolName === 'auth_username') {
-              if (this._store) {
-                account = subProtocol.data.toString()
-              }
+              account = subProtocol.data.toString()
             }
           }
           assert(token, 'auth_token subprotocol is required')
 
+          switch (this._accountMode) {
+            case AccountMode.Username:
+              assert(account, 'auth_username subprotocol is required')
+              break
+            case AccountMode.HashToken:
+              assert(!account || account === tokenToAccount(token),
+                'auth_username subprotocol is not available')
+              break
+          }
+          // Default the account to sha256(token).
+          if (!account) account = tokenToAccount(token)
+
+          this._addConnection(account, wsIncoming)
+
           this._log.trace('got auth info. token=' + token, 'account=' + account)
-          if (this._store) {
+          if (accountModeIsStored(this._accountMode) && this._store) {
             const storedToken = await Token.load({ account, store: this._store })
             const receivedToken = new Token({ account, token, store: this._store })
             if (storedToken) {
@@ -217,6 +253,7 @@ export default class Plugin extends AbstractBtpPlugin {
             btpPacket = BtpPacket.deserialize(binaryMessage)
           } catch (err) {
             wsIncoming.close()
+            return
           }
           this._log.trace(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
           try {
