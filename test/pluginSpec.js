@@ -108,6 +108,46 @@ describe('Mini Accounts Plugin', () => {
         assert.strictEqual(token._hashedToken, sha256('unhashed'))
       })
     })
+
+    describe('generateAccount = true', function () {
+      it('does not allow a random username', async function () {
+        const port = await getPort()
+        const serverUrl = 'ws://localhost:' + port
+        const plugin = new PluginMiniAccounts({
+          port: port,
+          debugHostIldcpInfo: { clientAddress: 'test.example' },
+          generateAccount: true,
+          _store: new Store()
+        })
+        await plugin.connect()
+        const msg = await sendAuthPacket(serverUrl, 'foobar', 'secret_token')
+        assert.strictEqual(msg.type, BtpPacket.TYPE_ERROR, 'expected a BTP error')
+        assert.strictEqual(msg.data.code, 'F00')
+        assert.strictEqual(msg.data.name, 'NotAcceptedError')
+        assert.strictEqual(msg.data.data, 'auth_username subprotocol is not available')
+        await plugin.disconnect()
+      })
+    })
+
+    describe('generateAccount = false', function () {
+      it('requires a username', async function () {
+        const port = await getPort()
+        const serverUrl = 'ws://localhost:' + port
+        const plugin = new PluginMiniAccounts({
+          port: port,
+          debugHostIldcpInfo: { clientAddress: 'test.example' },
+          generateAccount: false,
+          _store: new Store()
+        })
+        await plugin.connect()
+        const msg = await sendAuthPacket(serverUrl, '', 'secret_token')
+        assert.strictEqual(msg.type, BtpPacket.TYPE_ERROR, 'expected a BTP error')
+        assert.strictEqual(msg.data.code, 'F00')
+        assert.strictEqual(msg.data.name, 'NotAcceptedError')
+        assert.strictEqual(msg.data.data, 'auth_username subprotocol is required')
+        await plugin.disconnect()
+      })
+    })
   })
 
   describe('sendData', function () {
