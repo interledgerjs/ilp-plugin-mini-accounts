@@ -213,5 +213,27 @@ describe('Mini Accounts Plugin', () => {
         data: Buffer.alloc(0)
       })
     })
+
+    it('should return ilp reject when the prepare expires', async function () {
+      this.plugin._call = () => new Promise(() => {})
+
+      const result = await this.plugin.sendData(IlpPacket.serializeIlpPrepare({
+        destination: this.from,
+        amount: '123',
+        executionCondition: this.condition,
+        expiresAt: new Date(Date.now() + 50),
+        data: Buffer.alloc(0)
+      }))
+
+      const parsed = IlpPacket.deserializeIlpPacket(result)
+
+      assert.equal(parsed.typeString, 'ilp_reject')
+      assert.deepEqual(parsed.data, {
+        code: 'R00',
+        triggeredBy: 'test.example',
+        message: 'Packet expired',
+        data: Buffer.alloc(0)
+      })
+    })
   })
 })
