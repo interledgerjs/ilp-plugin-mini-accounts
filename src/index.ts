@@ -62,7 +62,11 @@ export default class Plugin extends AbstractBtpPlugin {
   // These can be overridden.
   // TODO can this be overridden via `extends`??
   protected _handleCustomData: (from: string, btpPacket: BtpPlugin.BtpPacket) => Promise<BtpPlugin.BtpSubProtocol[]>
-  protected _handlePrepareResponse: (destination: string, parsedIlpResponse: IlpPacket.IlpPacket, preparePacket: IlpPacket.IlpPacket) => void
+  protected _handlePrepareResponse: (destination: string, parsedIlpResponse: IlpPacket.IlpPacket, preparePacket: {
+    type: IlpPacket.Type.TYPE_ILP_PREPARE,
+    typeString?: 'ilp_prepare',
+    data: IlpPacket.IlpPrepare
+  }) => void
 
   constructor (opts: {
     port?: number,
@@ -292,29 +296,10 @@ export default class Plugin extends AbstractBtpPlugin {
 
   async sendData (buffer: Buffer): Promise<Buffer> {
     const parsedPacket = IlpPacket.deserializeIlpPacket(buffer)
-
-    let destination
-    let isPrepare = false
-    switch (parsedPacket.type) {
-      case IlpPacket.Type.TYPE_ILP_PAYMENT:
-      case IlpPacket.Type.TYPE_ILP_FORWARDED_PAYMENT:
-        destination = parsedPacket.data['account']
-        break
-      case IlpPacket.Type.TYPE_ILP_PREPARE:
-        isPrepare = true
-        destination = parsedPacket.data['destination']
-        if (this._sendPrepare) {
-          this._sendPrepare(destination, parsedPacket)
-        }
-        break
-      case IlpPacket.Type.TYPE_ILQP_LIQUIDITY_REQUEST:
-      case IlpPacket.Type.TYPE_ILQP_BY_SOURCE_REQUEST:
-      case IlpPacket.Type.TYPE_ILQP_BY_DESTINATION_REQUEST:
-        destination = parsedPacket.data['destinationAccount']
-        break
-      default:
-        throw new Error('can\'t route packet with no destination. type=' + parsedPacket.type)
+    if (parsedPacket.type !== IlpPacket.Type.TYPE_ILP_PREPARE) {
+      throw new Error(`can't route packet that's not a PREPARE.`)
     }
+    const { destination, expiresAt, executionCondition } = parsedPacket.data
 
     if (destination === 'peer.config') {
       return ILDCP.serializeIldcpResponse(this._hostIldcpInfo)
@@ -324,36 +309,71 @@ export default class Plugin extends AbstractBtpPlugin {
       throw new Error(`can't route packet that is not meant for one of my clients. destination=${destination} prefix=${this._prefix}`)
     }
 
-    const response = await this._call(destination, {
-      type: BtpPacket.TYPE_MESSAGE,
-      requestId: crypto.randomBytes(4).readUInt32BE(0),
-      data: { protocolData: [{
-        protocolName: 'ilp',
-        contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
-        data: buffer
-      }] }
+    let timeout: NodeJS.Timer
+    const duration = expiresAt.getTime() - Date.now()
+
+    const timeoutPacket = () =>
+      IlpPacket.serializeIlpReject({
+        code: 'R00',
+        message: 'Packet expired',
+        triggeredBy: this._hostIldcpInfo.clientAddress,
+        data: Buffer.alloc(0)
+      })
+
+    // Set timeout to expire the ILP packet
+    const timeoutPromise = new Promise<Buffer>(resolve => {
+      timeout = setTimeout(() => resolve(
+        timeoutPacket()
+      ), duration)
     })
 
-    const ilpResponse = response.protocolData.filter(p => p.protocolName === 'ilp')[0]
-    const parsedIlpResponse = IlpPacket.deserializeIlpPacket(ilpResponse.data)
+    // Forward ILP packet to peer over BTP
+    const responsePromise = this._call(destination, {
+      type: BtpPacket.TYPE_MESSAGE,
+      requestId: crypto.randomBytes(4).readUInt32BE(0),
+      data: {
+        protocolData: [{
+          protocolName: 'ilp',
+          contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
+          data: buffer
+        }]
+      }
+    }).then(response =>
+      // Extract the ILP packet from the BTP response
+      response.protocolData.filter(p => p.protocolName === 'ilp')[0].data
+    )
+
+    const ilpResponse = await Promise.race([
+      timeoutPromise,
+      responsePromise
+    ])
+
+    /* tslint:disable-next-line:no-unnecessary-type-assertion */
+    clearTimeout(timeout!)
+
+    const parsedIlpResponse = IlpPacket.deserializeIlpPacket(ilpResponse)
 
     if (parsedIlpResponse.type === IlpPacket.Type.TYPE_ILP_FULFILL) {
-      const executionCondition = parsedPacket.data['executionCondition'] || Buffer.alloc(0)
-      /* tslint:disable-next-line:no-unnecessary-type-assertion */
-      const fulfillResponse = parsedIlpResponse.data as IlpPacket.IlpFulfill
+      // In case the plugin is overloaded with events, confirm the FULFILL hasn't expired
+      const isExpired = Date.now() > expiresAt.getTime()
+      if (isExpired) {
+        return timeoutPacket()
+      }
+
+      const { fulfillment } = parsedIlpResponse.data
       if (!crypto.createHash('sha256')
-        .update(fulfillResponse.fulfillment)
+        .update(fulfillment)
         .digest()
         .equals(executionCondition)) {
         return IlpPacket.errorToReject(this._hostIldcpInfo.clientAddress,
           new Errors.WrongConditionError(
             'condition and fulfillment don\'t match. ' +
             `condition=${executionCondition.toString('hex')} ` +
-            `fulfillment=${fulfillResponse.fulfillment.toString('hex')}`))
+            `fulfillment=${fulfillment.toString('hex')}`))
       }
     }
 
-    if (isPrepare && this._handlePrepareResponse) {
+    if (this._handlePrepareResponse) {
       try {
         this._handlePrepareResponse(destination, parsedIlpResponse, parsedPacket)
       } catch (e) {
@@ -361,9 +381,7 @@ export default class Plugin extends AbstractBtpPlugin {
       }
     }
 
-    return ilpResponse
-      ? ilpResponse.data
-      : Buffer.alloc(0)
+    return ilpResponse || Buffer.alloc(0)
   }
 
   protected async _handleData (from: string, btpPacket: BtpPlugin.BtpPacket): Promise<BtpPlugin.BtpSubProtocol[]> {
