@@ -301,6 +301,10 @@ export default class Plugin extends AbstractBtpPlugin {
     }
     const { destination, expiresAt, executionCondition } = parsedPacket.data
 
+    if (this._sendPrepare) {
+      this._sendPrepare(destination, parsedPacket)
+    }
+
     if (destination === 'peer.config') {
       return ILDCP.serializeIldcpResponse(this._hostIldcpInfo)
     }
