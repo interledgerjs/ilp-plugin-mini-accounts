@@ -401,7 +401,7 @@ export default class Plugin extends AbstractBtpPlugin {
           contentType: BtpPacket.MIME_APPLICATION_OCTET_STREAM,
           data: await ILDCP.serve({
             requestPacket: ilp,
-            handler: () => ({
+            handler: async () => ({
               ...this._hostIldcpInfo,
               clientAddress: from
             }),
