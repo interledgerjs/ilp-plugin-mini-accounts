@@ -11,7 +11,7 @@ import OriginWhitelist from './lib/origin-whitelist'
 import Token from './token'
 import { Store, StoreWrapper } from './types'
 const createLogger = require('ilp-logger')
-import { IncomingMessage } from 'http'
+import * as http from 'http'
 
 const DEBUG_NAMESPACE = 'ilp-plugin-mini-accounts'
 
@@ -113,7 +113,7 @@ export default class Plugin extends AbstractBtpPlugin {
   // making the mini-accounts params optional makes them kinda compatible
   protected async _connect (address: string, authPacket: BtpPlugin.BtpPacket, opts: {
     ws: WebSocket,
-    req: IncomingMessage
+    req: http.IncomingMessage
   }): Promise<void> {}
   protected async _close (account: string, err?: Error): Promise<void> {}
   protected _sendPrepare (destination: string, parsedPacket: IlpPacket.IlpPacket): void {}
@@ -150,7 +150,16 @@ export default class Plugin extends AbstractBtpPlugin {
     }
 
     this._log.info('listening on port ' + this._wsOpts.port)
-    const wss = this._wss = new WebSocket.Server(this._wsOpts)
+
+    // http server for kubernetes health checks
+    const httpServer = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      res.write('ok')
+      res.end()
+    }).listen(this._wsOpts.port)
+
+    const wss = this._wss = new WebSocket.Server({ server: httpServer })
+
     wss.on('connection', (wsIncoming, req) => {
       this._log.trace('got connection')
       if (typeof req.headers.origin === 'string' && !this._allowedOrigins.isOk(req.headers.origin)) {
@@ -285,7 +294,11 @@ export default class Plugin extends AbstractBtpPlugin {
 
     if (this._wss) {
       const wss = this._wss
-      await new Promise((resolve) => wss.close(resolve))
+      await new Promise((resolve) => {
+        if (wss.options && wss.options.server) {
+          wss.options.server.close(resolve)
+        }
+      })
       this._wss = null
     }
   }
