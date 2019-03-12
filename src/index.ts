@@ -28,6 +28,21 @@ interface Logger {
   trace (...msg: any[]): void
 }
 
+export interface IlpPluginMiniAccountsConstructorOptions {
+  port?: number
+  wsOpts?: WebSocket.ServerOptions
+  currencyScale?: number
+  debugHostIldcpInfo?: ILDCP.IldcpResponse
+  allowedOrigins?: string[]
+  generateAccount?: boolean
+  _store?: Store
+}
+
+export interface IlpPluginMiniAccountsConstructorModules {
+  log?: Logger
+  store?: StoreWrapper
+}
+
 enum AccountMode {
   // Account is set using the `auth_username` BTP subprotocol.
   // A store is required in this mode.
@@ -71,18 +86,8 @@ export default class Plugin extends AbstractBtpPlugin {
     data: IlpPacket.IlpPrepare
   }) => void
 
-  constructor (opts: {
-    port?: number,
-    wsOpts?: WebSocket.ServerOptions,
-    currencyScale?: number,
-    debugHostIldcpInfo?: ILDCP.IldcpResponse,
-    allowedOrigins?: string[],
-    generateAccount?: boolean,
-    _store?: Store
-  }, { log, store }: {
-    log?: Logger,
-    store?: Store
-  } = {}) {
+  constructor (opts: IlpPluginMiniAccountsConstructorOptions,
+    { log, store }: IlpPluginMiniAccountsConstructorModules = {}) {
     super({})
     this._port = opts.port || 3000
     this._wsOpts = opts.wsOpts || { port: this._port }
