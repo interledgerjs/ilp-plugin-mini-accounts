@@ -89,7 +89,15 @@ export default class Plugin extends AbstractBtpPlugin {
   constructor (opts: IlpPluginMiniAccountsConstructorOptions,
     { log, store }: IlpPluginMiniAccountsConstructorModules = {}) {
     super({})
-    this._port = opts.port || 3000
+    if (opts.wsOpts && opts.wsOpts.port && opts.port) {
+      throw new Error('Specify at most one of: `ops.wsOpts.port`, `opts.port`.')
+    } else if (opts.wsOpts && opts.wsOpts.port) {
+      this._port = opts.wsOpts.port
+    } else if (opts.port) {
+      this._port = opts.port
+    } else {
+      this._port = 3000
+    }
     this._wsOpts = opts.wsOpts || { port: this._port }
     if (this._wsOpts.server) {
       this._httpServer = this._wsOpts.server

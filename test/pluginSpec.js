@@ -278,6 +278,16 @@ describe('Mini Accounts http requests', function() {
       assert.equal(res.status, 426)
       assert.equal(await res.text(), 'Upgrade Required')
     })
+    it('doesnt let user specify both opts.wsOpt.port and opts.port', async function() {
+      const constructPlugin = () => new PluginMiniAccounts({
+        ...this.pluginConfig,
+        port: this.port,
+        wsOpts: {
+          port: this.port
+        }
+      })
+      assert.throws(constructPlugin, 'Specify at most one of: `ops.wsOpts.port`, `opts.port`.')
+    })
     it('fails health check when port unspecified, wsOpt.port specified', async function() {
       this.plugin = new PluginMiniAccounts({
         ...this.pluginConfig,
