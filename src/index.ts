@@ -40,7 +40,7 @@ export interface IlpPluginMiniAccountsConstructorOptions {
 
 export interface IlpPluginMiniAccountsConstructorModules {
   log?: Logger
-  store?: StoreWrapper
+  store?: Store
 }
 
 enum AccountMode {
