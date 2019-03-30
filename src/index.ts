@@ -11,8 +11,7 @@ import OriginWhitelist from './lib/origin-whitelist'
 import Token from './token'
 import { Store, StoreWrapper } from './types'
 const createLogger = require('ilp-logger')
-import * as http from 'http'
-import * as https from 'https'
+import { IncomingMessage } from 'http'
 
 const DEBUG_NAMESPACE = 'ilp-plugin-mini-accounts'
 
@@ -26,21 +25,6 @@ interface Logger {
   error (...msg: any[]): void
   debug (...msg: any[]): void
   trace (...msg: any[]): void
-}
-
-export interface IlpPluginMiniAccountsConstructorOptions {
-  port?: number
-  wsOpts?: WebSocket.ServerOptions
-  currencyScale?: number
-  debugHostIldcpInfo?: ILDCP.IldcpResponse
-  allowedOrigins?: string[]
-  generateAccount?: boolean
-  _store?: Store
-}
-
-export interface IlpPluginMiniAccountsConstructorModules {
-  log?: Logger
-  store?: StoreWrapper
 }
 
 enum AccountMode {
@@ -63,9 +47,7 @@ function noopTrace (...msg: any[]): void { }
 export default class Plugin extends AbstractBtpPlugin {
   static version = 2
 
-  private _port: number
   private _wsOpts: WebSocket.ServerOptions
-  private _httpServer: http.Server | https.Server
   protected _currencyScale: number
   private _debugHostIldcpInfo?: ILDCP.IldcpResponse
   protected _log: Logger
@@ -86,22 +68,21 @@ export default class Plugin extends AbstractBtpPlugin {
     data: IlpPacket.IlpPrepare
   }) => void
 
-  constructor (opts: IlpPluginMiniAccountsConstructorOptions,
-    { log, store }: IlpPluginMiniAccountsConstructorModules = {}) {
+  constructor (opts: {
+    port?: number,
+    wsOpts?: WebSocket.ServerOptions,
+    currencyScale?: number,
+    debugHostIldcpInfo?: ILDCP.IldcpResponse,
+    allowedOrigins?: string[],
+    generateAccount?: boolean,
+    _store?: Store
+  }, { log, store }: {
+    log?: Logger,
+    store?: Store
+  } = {}) {
     super({})
-    if (opts.wsOpts && opts.wsOpts.port && opts.port) {
-      throw new Error('Specify at most one of: `ops.wsOpts.port`, `opts.port`.')
-    } else if (opts.wsOpts && opts.wsOpts.port) {
-      this._port = opts.wsOpts.port
-    } else if (opts.port) {
-      this._port = opts.port
-    } else {
-      this._port = 3000
-    }
-    this._wsOpts = opts.wsOpts || { port: this._port }
-    if (this._wsOpts.server) {
-      this._httpServer = this._wsOpts.server
-    }
+    const defaultPort = opts.port || 3000
+    this._wsOpts = opts.wsOpts || { port: defaultPort }
     this._currencyScale = opts.currencyScale || 9
     this._debugHostIldcpInfo = opts.debugHostIldcpInfo
 
@@ -132,7 +113,7 @@ export default class Plugin extends AbstractBtpPlugin {
   // making the mini-accounts params optional makes them kinda compatible
   protected async _connect (address: string, authPacket: BtpPlugin.BtpPacket, opts: {
     ws: WebSocket,
-    req: http.IncomingMessage
+    req: IncomingMessage
   }): Promise<void> {}
   protected async _close (account: string, err?: Error): Promise<void> {}
   protected _sendPrepare (destination: string, parsedPacket: IlpPacket.IlpPacket): void {}
@@ -168,11 +149,7 @@ export default class Plugin extends AbstractBtpPlugin {
       }
     }
 
-    this._log.info('listening on port ' + this._port)
-
-    if (this._httpServer) {
-      this._httpServer.listen(this._port)
-    }
+    this._log.info('listening on port ' + this._wsOpts.port)
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming, req) => {
       this._log.trace('got connection')
@@ -308,12 +285,7 @@ export default class Plugin extends AbstractBtpPlugin {
 
     if (this._wss) {
       const wss = this._wss
-      wss.close()
-      if (this._httpServer) {
-        await new Promise((resolve) => {
-          this._httpServer.close(resolve)
-        })
-      }
+      await new Promise((resolve) => wss.close(resolve))
       this._wss = null
     }
   }

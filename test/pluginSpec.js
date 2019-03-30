@@ -13,8 +13,6 @@ const PluginMiniAccounts = require('..')
 const Store = require('ilp-store-memory')
 const sendAuthPacket = require('./helper/btp-util')
 const Token = require('../src/token').default
-const http = require('http')
-const fetch = require('node-fetch')
 
 function sha256 (token) {
   return BtpPacket.base64url(crypto.createHash('sha256').update(token).digest('sha256'))
@@ -236,87 +234,6 @@ describe('Mini Accounts Plugin', () => {
         message: 'Packet expired',
         data: Buffer.alloc(0)
       })
-    })
-  })
-})
-
-describe('Mini Accounts http requests', function() {
-  beforeEach(function() {
-    this.port = 4000
-    this.pluginConfig = {
-      debugHostIldcpInfo: {
-        clientAddress: 'test.example'
-      },
-      _store: new Store()
-    }
-  })
-
-  describe('falls back', function() {
-    it('falls back to port 3000 if port unspecified', async function() {
-      this.plugin = new PluginMiniAccounts({
-        ...this.pluginConfig,
-      })
-      await this.plugin.connect()
-      const res = await fetch('http://localhost:3000')
-      assert.equal(res.status, 426)
-      assert.equal(await res.text(), 'Upgrade Required')
-      await this.plugin.disconnect()
-    })
-  })
-
-  describe('health checks', function() {
-    afterEach(async function() {
-      await this.plugin.disconnect()
-    })
-    it('fails health check when port specified, wsOpt.port unspecified', async function() {
-      this.plugin = new PluginMiniAccounts({
-        ...this.pluginConfig,
-        port: this.port,
-      })
-      await this.plugin.connect()
-      const res = await fetch(`http://localhost:${this.port}`)
-      assert.equal(res.status, 426)
-      assert.equal(await res.text(), 'Upgrade Required')
-    })
-    it('doesnt let user specify both opts.wsOpt.port and opts.port', async function() {
-      const constructPlugin = () => new PluginMiniAccounts({
-        ...this.pluginConfig,
-        port: this.port,
-        wsOpts: {
-          port: this.port
-        }
-      })
-      assert.throws(constructPlugin, 'Specify at most one of: `ops.wsOpts.port`, `opts.port`.')
-    })
-    it('fails health check when port unspecified, wsOpt.port specified', async function() {
-      this.plugin = new PluginMiniAccounts({
-        ...this.pluginConfig,
-        wsOpts: {
-          port: this.port
-        },
-      })
-      await this.plugin.connect()
-      const res = await fetch(`http://localhost:${this.port}`)
-      assert.equal(res.status, 426)
-      assert.equal(await res.text(), 'Upgrade Required')
-    })
-    it('passes health check when port specified, wsOpts.server specified', async function() {
-      const httpServer = http.createServer((req, res) => {
-        res.writeHead(200, { 'Content-Type': 'text/html' })
-        res.write('ok')
-        res.end()
-      })
-      this.plugin = new PluginMiniAccounts({
-        port: this.port,
-        wsOpts: {
-          server: httpServer
-        },
-        ...this.pluginConfig
-      })
-      await this.plugin.connect()
-      const res = await fetch(`http://localhost:${this.port}`)
-      assert.equal(res.status, 200)
-      assert.equal(await res.text(), 'ok')
     })
   })
 })
