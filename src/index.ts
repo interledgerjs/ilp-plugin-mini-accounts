@@ -309,6 +309,7 @@ export default class Plugin extends AbstractBtpPlugin {
     if (this._wss) {
       const wss = this._wss
       wss.close()
+      await new Promise(r => setImmediate(r)) // Wait for the client connections to close
       if (this._httpServer) {
         await new Promise((resolve) => {
           this._httpServer.close(resolve)
