@@ -308,8 +308,12 @@ export default class Plugin extends AbstractBtpPlugin {
 
     if (this._wss) {
       const wss = this._wss
-      wss.close()
-      await new Promise(r => setImmediate(r)) // Wait for the client connections to close
+      // Close the websocket server
+      await new Promise((resolve) => wss.close(resolve))
+      // The above doesn't wait until the individual sockets have been closed. So they wouldn't be removed before this function returns.
+      // Remove the individual sockets manually
+      this._connections.clear()
+
       if (this._httpServer) {
         await new Promise((resolve) => {
           this._httpServer.close(resolve)
