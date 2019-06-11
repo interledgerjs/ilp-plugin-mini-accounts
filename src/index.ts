@@ -259,14 +259,16 @@ export default class Plugin extends AbstractBtpPlugin {
           wsIncoming.send(BtpPacket.serializeResponse(authPacket.requestId, []))
         } catch (err) {
           if (authPacket) {
-            this._log.debug('not accepted error during auth. error=', err)
+            this._log.debug('not accepted error during auth. error="%s" readyState=%d', err, wsIncoming.readyState)
             const errorResponse = BtpPacket.serializeError({
               code: 'F00',
               name: 'NotAcceptedError',
               data: err.message || err.name,
               triggeredAt: new Date().toISOString()
             }, authPacket.requestId, [])
-            wsIncoming.send(errorResponse) // TODO throws error "not opened"
+            if (wsIncoming.readyState === WebSocket.OPEN) {
+              wsIncoming.send(errorResponse)
+            }
           }
           wsIncoming.close()
           return
@@ -282,19 +284,22 @@ export default class Plugin extends AbstractBtpPlugin {
             wsIncoming.close()
             return
           }
-          this._log.trace(`account ${account}: processing btp packet ${JSON.stringify(btpPacket)}`)
+          this._log.trace('account %s: processing btp packet %o', account, btpPacket)
           try {
             this._log.trace('packet is authorized, forwarding to host')
             await this._handleIncomingBtpPacket(this._prefix + account, btpPacket)
           } catch (err) {
-            this._log.debug('btp packet not accepted', err)
+            this._log.debug('btp packet not accepted. error="%s" readyState=%d', err, wsIncoming.readyState)
             const errorResponse = BtpPacket.serializeError({
               code: 'F00',
               name: 'NotAcceptedError',
               triggeredAt: new Date().toISOString(),
               data: err.message
             }, btpPacket.requestId, [])
-            wsIncoming.send(errorResponse)
+            // The websocket may have been closed during _handleIncomingBtpPacket.
+            if (wsIncoming.readyState === WebSocket.OPEN) {
+              wsIncoming.send(errorResponse)
+            }
           }
         })
       })
@@ -474,12 +479,12 @@ export default class Plugin extends AbstractBtpPlugin {
       throw new Error('No clients connected for account ' + account)
     }
 
-    Array.from(connections).map(wsIncoming => {
+    connections.forEach((wsIncoming) => {
       const result = new Promise(resolve => wsIncoming.send(BtpPacket.serialize(btpPacket), resolve))
 
       result.catch(err => {
         const errorInfo = (typeof err === 'object' && err.stack) ? err.stack : String(err)
-        this._log.debug('unable to send btp message to client: ' + errorInfo, 'btp packet:', JSON.stringify(btpPacket))
+        this._log.debug('unable to send btp message to client: %s; btp packet: %o', errorInfo, btpPacket)
       })
     })
   }
