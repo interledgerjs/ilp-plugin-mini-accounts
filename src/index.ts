@@ -65,7 +65,10 @@ export default class Plugin extends AbstractBtpPlugin {
 
   private _port: number
   private _wsOpts: WebSocket.ServerOptions
-  private _httpServer: http.Server | https.Server
+  // There's an extra underscore because AbstractBtpPlugin already has a property
+  // named `_httpServer`.
+  /* tslint:disable-next-line:variable-name */
+  private _miniAccountsHttpServer: http.Server | https.Server
   protected _currencyScale: number
   private _debugHostIldcpInfo?: ILDCP.IldcpResponse
   protected _log: Logger
@@ -100,7 +103,7 @@ export default class Plugin extends AbstractBtpPlugin {
     }
     this._wsOpts = opts.wsOpts || { port: this._port }
     if (this._wsOpts.server) {
-      this._httpServer = this._wsOpts.server
+      this._miniAccountsHttpServer = this._wsOpts.server
     }
     this._currencyScale = opts.currencyScale || 9
     this._debugHostIldcpInfo = opts.debugHostIldcpInfo
@@ -170,8 +173,8 @@ export default class Plugin extends AbstractBtpPlugin {
 
     this._log.info('listening on port ' + this._port)
 
-    if (this._httpServer) {
-      this._httpServer.listen(this._port)
+    if (this._miniAccountsHttpServer) {
+      this._miniAccountsHttpServer.listen(this._port)
     }
     const wss = this._wss = new WebSocket.Server(this._wsOpts)
     wss.on('connection', (wsIncoming, req) => {
@@ -319,9 +322,9 @@ export default class Plugin extends AbstractBtpPlugin {
       // Remove the individual sockets manually
       this._connections.clear()
 
-      if (this._httpServer) {
+      if (this._miniAccountsHttpServer) {
         await new Promise((resolve) => {
-          this._httpServer.close(resolve)
+          this._miniAccountsHttpServer.close(resolve)
         })
       }
       this._wss = null
