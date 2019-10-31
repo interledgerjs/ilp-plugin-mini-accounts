@@ -41,7 +41,7 @@
     "ilp-store-memory": "^1.0.0",
     "ilp-store-wrapper": "^2.0.0",
     "int64": "0.0.5",
-    "ws": "^6.0.0"
+    "ws": "^7.2.0"
   },
   "devDependencies": {
     "chai": "^4.1.2",
