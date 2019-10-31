@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc --project .",
     "test": "mocha",
+    "prepack": "npm run build",
     "prepare": "npm run build",
     "pretest": "npm run build",
     "lint": "tslint --project ."
