@@ -357,6 +357,7 @@ export default class Plugin extends AbstractBtpPlugin {
     let timeout: NodeJS.Timer
     const duration = expiresAt.getTime() - Date.now()
 
+    // TODO create a constant
     const timeoutPacket = () =>
       IlpPacket.serializeIlpReject({
         code: 'R00',
@@ -470,6 +471,7 @@ export default class Plugin extends AbstractBtpPlugin {
     return this.ilpAndCustomToProtocolData({ ilp: response })
   }
 
+  // TODO properly await Promise.all(map(...))
   protected async _handleOutgoingBtpPacket (to: string, btpPacket: BtpPlugin.BtpPacket) {
     if (!to.startsWith(this._prefix)) {
       throw new Error(`invalid destination, must start with prefix. destination=${to} prefix=${this._prefix}`)
